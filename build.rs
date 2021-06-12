@@ -1,5 +1,6 @@
+extern crate cc;
+
 fn main() {
-    extern crate cc;
     println!("cargo:rerun-if-changed=parser");
     cc::Build::new()
         .include("parser")

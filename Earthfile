@@ -22,11 +22,17 @@ raw-bindings:
   RUN bindgen ./parser/include/pg_query.h > /bindings.rs
   SAVE ARTIFACT /bindings.rs AS LOCAL ./src/bindings.rs
 
+prost-build-cli:
+  COPY ./prost_build_cli /prost_build_cli
+  RUN cd /prost_build_cli && cargo build
+  SAVE ARTIFACT /prost_build_cli/target/debug/prost_build_cli
+  SAVE IMAGE prost_build_cli
+
 pb-codegen:
   FROM +build-deps
-  RUN apt update && apt install -y --no-install-recommends protobuf-compiler
-  RUN cargo install protobuf-codegen
+  COPY +prost-build-cli/prost_build_cli/target/debug/prost_build_cli /build
   COPY +lib-pg-query/parser /parser
   RUN mkdir /pb
-  RUN protoc --proto_path=/parser/include/protobuf --rust_out=/pb /parser/include/protobuf/pg_query.proto 
+  RUN OUT_DIR=/pb /build --out-dir=/pb --include=/parser/include/protobuf/ /parser/include/protobuf/pg_query.proto
+  # RUN protoc --proto_path=/parser/include/protobuf --rust_out=/pb /parser/include/protobuf/pg_query.proto 
   SAVE ARTIFACT /pb AS LOCAL ./src/pbuf
