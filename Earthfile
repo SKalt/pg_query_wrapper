@@ -34,5 +34,4 @@ pb-codegen:
   COPY +lib-pg-query/parser /parser
   RUN mkdir /pb
   RUN OUT_DIR=/pb /build --out-dir=/pb --include=/parser/include/protobuf/ /parser/include/protobuf/pg_query.proto
-  # RUN protoc --proto_path=/parser/include/protobuf --rust_out=/pb /parser/include/protobuf/pg_query.proto 
-  SAVE ARTIFACT /pb AS LOCAL ./src/pbuf
+  SAVE ARTIFACT /pb/pg_query.rs AS LOCAL ./src/pbuf.rs
