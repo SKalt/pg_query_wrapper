@@ -1,9 +1,12 @@
-use std::ffi::{CStr, CString, IntoStringError, NulError};
 use prost::Message;
+use std::{
+    ffi::{CStr, CString, IntoStringError, NulError},
+    sync::mpsc::Receiver,
+    usize,
+};
 
 mod bindings;
 mod pbuf;
-
 
 /// Safely copy a slice of bytes from a raw pointer to a C char array.
 fn read_buf_from_ptr(ptr: *mut ::std::os::raw::c_char) -> Result<Vec<u8>, Failure> {
@@ -15,7 +18,7 @@ fn read_buf_from_ptr(ptr: *mut ::std::os::raw::c_char) -> Result<Vec<u8>, Failur
         // important! Allocate new memory that we own to the borrowed bytes can be freed
         let mut owned_bytes = vec![0u8; borrowed_bytes.len()];
         owned_bytes.copy_from_slice(borrowed_bytes);
-        return Ok(owned_bytes)
+        return Ok(owned_bytes);
     }
 }
 
@@ -27,6 +30,7 @@ fn read_string_from_ptr(ptr: *mut ::std::os::raw::c_char) -> Result<String, Fail
 }
 
 /// an owned version of the C equivalent in pg_query.h.
+#[derive(Debug)]
 pub struct PgQueryError {
     pub message: String,
     pub funcname: String,
@@ -46,7 +50,7 @@ impl PgQueryError {
             let context = read_string_from_ptr(orig.context)?;
             let lineno = orig.lineno.clone();
             let cursorpos = orig.cursorpos.clone();
-            return Ok(PgQueryError{
+            return Ok(PgQueryError {
                 message,
                 funcname,
                 filename,
@@ -61,6 +65,7 @@ impl PgQueryError {
 }
 
 /// All the ways that I know of that this library can fail.
+#[derive(Debug)]
 pub enum Failure {
     PgQueryError(PgQueryError),
     NulError(NulError),
@@ -113,8 +118,8 @@ pub fn normalize_query(query: &str) -> Result<String, Failure> {
             let normalized_result = read_string_from_ptr(result.normalized_query);
             bindings::pg_query_free_normalize_result(result);
             match normalized_result {
-                Err(error) =>  return Err(error),
-                Ok(normalized_query) => return Ok(normalized_query)
+                Err(error) => return Err(error),
+                Ok(normalized_query) => return Ok(normalized_query),
             };
         }
     }
@@ -138,13 +143,13 @@ pub fn scan(query: &str) -> Result<pbuf::ScanResult, Failure> {
                 Err(error) => {
                     bindings::pg_query_free_scan_result(result); // the original buffer gets freed here
                     return Err(error);
-                },
+                }
                 Ok(buf) => {
                     match pbuf::ScanResult::decode(buf.as_slice()) {
                         Err(error) => {
                             bindings::pg_query_free_scan_result(result); // the original buffer gets freed here
                             return Err(Failure::DecodeError(error));
-                        },
+                        }
                         Ok(scan_result) => {
                             bindings::pg_query_free_scan_result(result); // the original buffer gets freed here
                             return Ok(scan_result);
@@ -184,6 +189,7 @@ pub fn parse_to_json(query: &str) -> Result<String, Failure> {
     }
 }
 
+/// parses *sql* to its protobuf equivalent
 pub fn parse_to_protobuf(query: &str) -> Result<pbuf::ParseResult, Failure> {
     let input = CString::new(query)?;
     unsafe {
@@ -217,14 +223,95 @@ pub fn parse_to_protobuf(query: &str) -> Result<pbuf::ParseResult, Failure> {
     }
 }
 
+/// equivalent to pg_query_parse_plpgsql
+pub fn parse_plpgsql(query: &str) -> Result<String, Failure> {
+    let input = CString::new(query)?;
+    unsafe {
+        let result = bindings::pg_query_parse_plpgsql(input.as_ptr());
+        if result.error != std::ptr::null_mut::<bindings::PgQueryError>() {
+            let error_result = PgQueryError::from_original(result.error);
+            bindings::pg_query_free_plpgsql_parse_result(result);
+            match error_result {
+                Err(error) => return Err(error),
+                Ok(error) => return Err(Failure::PgQueryError(error)),
+            }
+        } else if result.plpgsql_funcs == std::ptr::null_mut::<::std::os::raw::c_char>() {
+            bindings::pg_query_free_plpgsql_parse_result(result);
+            return Err(Failure::NullPtr);
+        } else {
+            let result_json = read_string_from_ptr(result.plpgsql_funcs)?;
+            bindings::pg_query_free_plpgsql_parse_result(result);
+            return Ok(result_json);
+        }
+    }
+}
 
-// / equivalent to pg_query_parse_plpgsql
-// fn parse_plpgsql(query: &str) {}
+pub fn split_statements_with_scanner(query: &str) -> Result<Vec<&str>, Failure> {
+    let input = CString::new(query)?;
+    unsafe {
+        let result = bindings::pg_query_split_with_scanner(input.as_ptr());
+        println!("{:?}", result);
+        if result.error != std::ptr::null_mut::<bindings::PgQueryError>() {
+            let err_result = PgQueryError::from_original(result.error);
+            bindings::pg_query_free_split_result(result);
+            match err_result {
+                Err(error) => Err(error),
+                Ok(error) => Err(Failure::PgQueryError(error)),
+            }
+        } else {
+            let n_stmts = result.n_stmts as usize;
+            let mut y = Vec::<&str>::with_capacity(n_stmts);
+            for offset in 0..n_stmts {
+                let ptr = result.stmts.add(offset);
+                let stmt = *ptr.read();
+                let start = stmt.stmt_location as usize;
+                let end = start + stmt.stmt_len as usize;
+                let split_stmt = &query[start..end];
+                y.push(split_stmt);
+                // not sure the start..end slice'll hold up for non-utf8 charsets
+            }
+            bindings::pg_query_free_split_result(result);
+            return Ok(y);
+        }
+    }
+}
+#[test]
+fn test_splitting_with_scanner() {
+    let actual = split_statements_with_scanner("select 1; select 2;");
+    assert!(actual.is_ok());
+    let expected = vec!["select 1", " select 2"];
+    assert_eq!(actual.unwrap(), expected,);
+}
 
-// pg_query_free_plpgsql_parse_result
-// pub fn split_statements() {}
-
-// pub fn parse_plpgsql() {}
+pub fn split_statements_with_parser(query: &str) -> Result<Vec<&str>, Failure> {
+    let input = CString::new(query)?;
+    unsafe {
+        let result = bindings::pg_query_split_with_parser(input.as_ptr());
+        println!("{:?}", result);
+        if result.error != std::ptr::null_mut::<bindings::PgQueryError>() {
+            let err_result = PgQueryError::from_original(result.error);
+            bindings::pg_query_free_split_result(result);
+            match err_result {
+                Err(error) => Err(error),
+                Ok(error) => Err(Failure::PgQueryError(error)),
+            }
+        } else {
+            let n_stmts = result.n_stmts as usize;
+            let mut y = Vec::<&str>::with_capacity(n_stmts);
+            let stmts = *result.stmts;
+            for offset in 0..n_stmts {
+                let ptr = stmts.add(offset);
+                let stmt = ptr.read();
+                let start = stmt.stmt_location as usize;
+                let end = start + stmt.stmt_len as usize;
+                y[offset] = &query[start..end];
+                // not sure this'll ^^^^^^^^ hold up for non-utf8 charsets
+            }
+            bindings::pg_query_free_split_result(result);
+            return Ok(y);
+        }
+    }
+}
 
 // FingerprintResult
 // pg_query_free_split_result

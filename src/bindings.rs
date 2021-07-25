@@ -282,6 +282,7 @@ pub struct PgQueryProtobuf {
     pub len: ::std::os::raw::c_uint,
     pub data: *mut ::std::os::raw::c_char,
 }
+
 #[test]
 fn bindgen_test_layout_PgQueryProtobuf() {
     assert_eq!(
