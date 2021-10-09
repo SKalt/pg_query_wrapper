@@ -275,6 +275,7 @@ pub fn split_statements_with_scanner(query: &str) -> Result<Vec<&str>, Failure> 
         }
     }
 }
+
 #[test]
 fn test_splitting_with_scanner() {
     let actual = split_statements_with_scanner("select 1; select 2;");
@@ -298,13 +299,13 @@ pub fn split_statements_with_parser(query: &str) -> Result<Vec<&str>, Failure> {
         } else {
             let n_stmts = result.n_stmts as usize;
             let mut y = Vec::<&str>::with_capacity(n_stmts);
-            let stmts = *result.stmts;
             for offset in 0..n_stmts {
-                let ptr = stmts.add(offset);
-                let stmt = ptr.read();
+                let ptr = result.stmts.add(offset);
+                let stmt = *ptr.read();
                 let start = stmt.stmt_location as usize;
                 let end = start + stmt.stmt_len as usize;
-                y[offset] = &query[start..end];
+                let split_stmt = &query[start..end];
+                y.push(split_stmt);
                 // not sure this'll ^^^^^^^^ hold up for non-utf8 charsets
             }
             bindings::pg_query_free_split_result(result);
@@ -313,6 +314,13 @@ pub fn split_statements_with_parser(query: &str) -> Result<Vec<&str>, Failure> {
     }
 }
 
+#[test]
+fn test_splitting_with_parser() {
+    let actual = split_statements_with_parser("select 1; select 2;");
+    assert!(actual.is_ok());
+    let expected = vec!["select 1", " select 2"];
+    assert_eq!(actual.unwrap(), expected,);
+}
 // FingerprintResult
 // pg_query_free_split_result
 // pg_query_free_deparse_result
