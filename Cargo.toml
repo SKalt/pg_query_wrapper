@@ -18,5 +18,4 @@ cc = "1.0"
 [workspace]
 members = [
   "prost_build_cli",
-  "libpg_query-sys",
 ]

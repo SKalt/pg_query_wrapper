@@ -223,6 +223,11 @@ pub fn parse_to_protobuf(query: &str) -> Result<pbuf::ParseResult, Failure> {
     }
 }
 
+#[test]
+fn test_parsing_to_pbuf() {
+    assert!(parse_to_protobuf("select 1;").is_ok())
+}
+
 /// equivalent to pg_query_parse_plpgsql
 pub fn parse_plpgsql(query: &str) -> Result<String, Failure> {
     let input = CString::new(query)?;
