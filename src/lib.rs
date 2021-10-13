@@ -1,7 +1,6 @@
 use prost::Message;
 use std::{
     ffi::{CStr, CString, IntoStringError, NulError},
-    sync::mpsc::Receiver,
     usize,
 };
 

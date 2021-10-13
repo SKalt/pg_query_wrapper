@@ -1,7 +1,4 @@
-
-
 use std::process::exit;
-
 use clap;
 
 fn main() {
