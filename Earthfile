@@ -4,7 +4,7 @@ RUN --mount=type=cache,target=/var/cache/apt apt update \
 
 lib-pg-query:
   COPY ./scripts/get_pg_query_source.sh /tmp/
-  ARG LIB_PG_QUERY_TAG=13-2.0.4
+  ARG LIB_PG_QUERY_TAG=13-2.1.0
   ENV LIB_PG_QUERY_TAG=${LIB_PG_QUERY_TAG}
   RUN bash /tmp/get_pg_query_source.sh
   SAVE ARTIFACT /parser AS LOCAL ./parser
@@ -12,7 +12,7 @@ lib-pg-query:
 build-deps:
   RUN --mount=type=cache,target=/var/cache/apt apt update \
     && apt install --no-install-recommends -y clang
-  RUN cargo install cargo-chef bindgen
+  RUN cargo install cargo-chef bindgen # TODO: actually use cargo chef
   RUN rustup component add rustfmt
   SAVE IMAGE libpg_query_sys__build_deps
 
