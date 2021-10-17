@@ -254,7 +254,6 @@ pub fn split_statements_with_scanner(query: &str) -> Result<Vec<&str>, Failure> 
     let input = CString::new(query)?;
     unsafe {
         let result = bindings::pg_query_split_with_scanner(input.as_ptr());
-        println!("{:?}", result);
         if result.error != std::ptr::null_mut::<bindings::PgQueryError>() {
             let err_result = PgQueryError::from_original(result.error);
             bindings::pg_query_free_split_result(result);
