@@ -347,4 +347,11 @@ pub fn fingerprint(query: &str) -> Result<(u64, String), Failure> {
     }
 }
 
-// pg_query_free_deparse_result
+#[test]
+fn test_fingerprint() {
+    let actual = fingerprint("select 1");
+    assert!(actual.is_ok());
+    let (digested, hex) = actual.unwrap();
+    assert_eq!(digested, 5836069208177285818);
+    assert_eq!(hex, "50fde20626009aba");
+}
