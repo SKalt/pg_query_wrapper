@@ -1,11 +1,10 @@
+pub mod pbuf;
 use prost::Message;
 use std::{
     ffi::{CStr, CString, IntoStringError, NulError},
     usize,
 };
-
 mod bindings;
-mod pbuf;
 
 /// Safely copy a slice of bytes from a raw pointer to a C char array.
 fn read_buf_from_ptr(ptr: *mut ::std::os::raw::c_char) -> Result<Vec<u8>, Failure> {
